@@ -24,6 +24,7 @@ use std::collections::HashMap;
 const FLAG_PREFIX: char = '-';
 
 /// Represents a flag for a command.
+#[derive(Clone)]
 pub struct Flag {
     
     ///This identifier should be the letter or phrase that signifies the flag. This should not include '-'.
@@ -43,31 +44,32 @@ pub trait Command {
     ///The implementation of this function should execute the command with the given flag information.
     fn execute_command(&self, flags: HashMap<String, String>);
 
-    ///Returns general help text about the command.
-    fn get_help(&self) -> &'static str;
-
-    ///Returns the flags that are valid for the command.
-    fn get_flags(&self) -> std::vec::Vec<Flag>;
-    
-    ///Returns the name of the command.
-    fn get_name(&self) -> &'static str;
+    ///Returns general information about the command such as its name, help text, flags, and the flag's help information.
+    fn get_information(&self) -> CommandInformation;
 }
 assert_obj_safe!(Command);
 
+///Holds various information that is mainly utilized by the help command.
+#[derive(Clone)]
+pub struct CommandInformation {
+    command_name: &'static str,
+    command_help: &'static str,
+    flags: std::vec::Vec<Flag>
+}
 pub struct HelpCommand {
-    /// <command_name<flag_identifier, flag_data>>
-    pub known_commands: HashMap<String, HashMap<String, Flag>>
+    ///Some general information about a command
+    pub known_commands: std::vec::Vec<CommandInformation>
 }
 
 impl HelpCommand {
 
     pub fn new(commands: &std::vec::Vec<Box<dyn Command>>) -> HelpCommand {
-        let mut known: HashMap<String, HashMap<String, Flag>> = HashMap::new();
+        let mut known: std::vec::Vec<CommandInformation> = std::vec::Vec::with_capacity(commands.len() + 1);
+        known.push(HelpCommand::get_info());
+
+        //Grab the information about each command
         for command in commands {
-            //Parse each command into <name, flags>
-            let command_name = command.get_name();
-            let flag_data = HelpCommand::parse_flags(command);
-            known.insert(command_name.to_string(), flag_data);
+            known.push(command.get_information());
         }
 
         return HelpCommand { 
@@ -75,30 +77,75 @@ impl HelpCommand {
         };
     }
 
-    ///Parses a command's flags into the HashMap format <flag_name, flag_data>
-    fn parse_flags(command: &Box<dyn Command>) -> HashMap<String, Flag> {
-        let mut flag_data: HashMap<String, Flag> = HashMap::new();
-
-        for flag in command.get_flags() {
-            flag_data.insert(flag.identifier.to_string(), flag);
+    fn get_info() -> CommandInformation {
+        return CommandInformation {
+            command_name: "help",
+            command_help: "Displays help information about commands and their flags.",
+            flags:
+                vec![
+                    Flag {
+                        identifier: "c",
+                        flag_help: "Displays information about the specified command and its flags",
+                        required: false
+                    },
+                    Flag {
+                        identifier: "f",
+                        flag_help: "Displays information about a flag specific to the specified command",
+                        required: false
+                    }
+                ]
         }
-
-        return flag_data;
     }
 
     ///Displays help information on all available commands.
     fn display_all_commands_help(&self) {
-        
+        for info in &self.known_commands {
+            println!("{}, {}, # Flags: {}", info.command_name, info.command_help, info.flags.len());
+        }
     }
 
     ///Displays help information about a specific command and lists its flags and their help information.
-    fn display_command_help(&self) {
-
+    fn display_command_help(&self, command: CommandInformation) {
+        //Print a little header
+        println!("'{}' help", command.command_name);
+        println!("{}", command.command_help);
+        println!("");
+        
+        //Print the available flags
+        for flag in command.flags {
+            println!("-{}, {}, required: {}", flag.identifier, flag.flag_help, flag.required);
+        }
     }
 
     ///Displays help information about a specific command's flag.
-    fn display_flag_help(&self) {
+    fn display_flag_help(&self, command: CommandInformation, flag_identifier: &String) {
+        
+        let flag_help = self.search_flag_help(command.flags, flag_identifier);
+        if flag_help.is_some() {
+            println!("{} -{}", command.command_name, flag_identifier);
+            println!("{}", flag_help.unwrap());
+        }
+        else {
+            println!("{} does not have a flag -{}", command.command_name, flag_identifier);
+        }
+    }
 
+    fn search_flag_help(&self, flags: std::vec::Vec<Flag>, target_flag_identifier: &String) -> Option<&'static str> {
+        for flag in flags {
+            if flag.identifier == target_flag_identifier {
+                return Some(flag.flag_help);
+            }
+        }
+        return None;
+    }
+
+    fn get_command_info(&self, command_name: &String) -> Option<CommandInformation> {
+        for command_info in self.known_commands.clone() {
+            if command_info.command_name == command_name {
+                return Some(command_info);
+            }
+        }
+        return None;
     }
 }
 
@@ -107,14 +154,21 @@ impl Command for HelpCommand {
     fn execute_command(&self, flags: std::collections::HashMap<std::string::String, std::string::String>) { 
         let command = flags.get("c");
         if command.is_some() {
-            let flag = flags.get("f");
-            if flag.is_some() {
-                //Display help for a specific command's flag
-                self.display_flag_help();
-            }
+            let command_info = self.get_command_info(command.unwrap());
+
+            if command_info.is_some() {
+                let flag = flags.get("f");
+                if flag.is_some() {
+                    //Display help for a specific command's flag
+                    self.display_flag_help(command_info.unwrap(), flag.unwrap());
+                }
+                else {
+                    //Display help about a specific command and list its flags and their help
+                    self.display_command_help(command_info.unwrap());
+                }
+            } 
             else {
-                //Display help about a specific command and list its flags and their help
-                self.display_command_help();
+                println!("{} is not a registered command", command.unwrap());
             }
         }
         else {
@@ -123,27 +177,8 @@ impl Command for HelpCommand {
         }
     }
 
-    fn get_help(&self) -> &'static str { 
-        return "Displays help information about commands and their flags.";
-    }
-
-    fn get_flags(&self) -> std::vec::Vec<Flag> { 
-        return vec![
-            Flag {
-                identifier: "c",
-                flag_help: "Displays information about the specified command and its flags",
-                required: false
-            },
-            Flag {
-                identifier: "f",
-                flag_help: "Displays information about a flag specific to the specified command",
-                required: false
-            }
-        ];
-    }
-
-    fn get_name(&self) -> &'static str { 
-        return "help";
+    fn get_information(&self) -> CommandInformation { 
+        return HelpCommand::get_info();
     }
 }
 
@@ -163,7 +198,7 @@ impl<'a> Commander<'a> {
         //Register the rest of the commands
         let mut known: HashMap<String, &Box<dyn Command>> = HashMap::with_capacity(commands.len());
         for command in commands {
-            known.insert(command.get_name().to_string(), command);
+            known.insert(command.get_information().command_name.to_string(), command);
         }
         
         return Commander {
@@ -241,7 +276,7 @@ impl<'a> Commander<'a> {
                 if found_flags.is_some() {
                     //We have our flags parsed, the command has been found and are ready to execute the command
                     let flags = found_flags.unwrap();
-                    if self.verify_flags(&flags, command.get_flags()) {
+                    if self.verify_flags(&flags, command.get_information().flags) {
                         command.execute_command(flags);
                     }
                 }
