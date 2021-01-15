@@ -1,6 +1,5 @@
 /*
 Parts todo:
-help command
 command aliases
 strong static assertions
 debug runtime contracts
@@ -16,7 +15,6 @@ global_prefix command_name [OptionalArgs(<flag, value>)]
 https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#specifying-path-dependencies
 */
 
-use std::borrow::Borrow;
 use contracts::*;
 use static_assertions::*;
 use std::collections::HashMap;
@@ -46,15 +44,18 @@ pub trait Command {
 
     ///Returns general information about the command such as its name, help text, flags, and the flag's help information.
     fn get_information(&self) -> CommandInformation;
+
+    ///Called when execution is supposed to be terminated. Will forcefully end execution after 5 seconds if execution is still going.
+    fn cancel(&self);
 }
 assert_obj_safe!(Command);
 
 ///Holds various information that is mainly utilized by the help command.
 #[derive(Clone)]
 pub struct CommandInformation {
-    command_name: &'static str,
-    command_help: &'static str,
-    flags: std::vec::Vec<Flag>
+    pub command_name: &'static str,
+    pub command_help: &'static str,
+    pub flags: std::vec::Vec<Flag>
 }
 pub struct HelpCommand {
     ///Some general information about a command
@@ -180,6 +181,10 @@ impl Command for HelpCommand {
     fn get_information(&self) -> CommandInformation { 
         return HelpCommand::get_info();
     }
+
+    fn cancel(&self) { 
+        todo!();
+    }
 }
 
 
@@ -208,7 +213,7 @@ impl<'a> Commander<'a> {
 
     /// Parses the specified tokens for flags and their values.
     /// Returns the flags as a HashMap<String, String>
-    #[debug_requires(tokens.clone().next().is_some())]
+    ///#[debug_requires(tokens.clone().next().is_some())]
     fn parse_flags(&self, tokens: std::str::SplitWhitespace) -> Option<HashMap<String, String>> {
         let mut parsed_flags = HashMap::new();
         let mut flag = String::new();
@@ -216,7 +221,7 @@ impl<'a> Commander<'a> {
 
         for token in tokens {
             if token.starts_with(FLAG_PREFIX) {
-                flag = token.to_string();
+                flag = token.to_string().replace("-", "");
                 if parsed_flags.contains_key(&flag) {
                     //We shouldn't have a flag twice
                     println!("Flag {} has been discovered twice", flag);
@@ -229,16 +234,21 @@ impl<'a> Commander<'a> {
             }
             else {
                 flag_value = token.to_string();
-                let stored_flag_value = parsed_flags.get_key_value(&flag).unwrap().1;
-                if stored_flag_value == &String::new() { //This probably won't work as they are both references?? Unless we did string aliasing...
-                    //Set the value for the flag
-                    parsed_flags.remove_entry(&flag);
-                    parsed_flags.insert(flag.clone(), flag_value);
+                let wrapped_stored_flag_value = parsed_flags.get_key_value(&flag);
+                if wrapped_stored_flag_value.is_some() {
+                    if wrapped_stored_flag_value.unwrap().1 == &String::new() {
+                        //Set the value for the flag
+                        parsed_flags.remove_entry(&flag);
+                        parsed_flags.insert(flag.clone(), flag_value);
+                    }
+                    else {
+                        //Flags shouldn't have two values
+                        println!("Flag {} already has a value", flag);
+                        return None;
+                    }
                 }
                 else {
-                    //Flags shouldn't have two values
-                    println!("Flag {} already has a value", flag);
-                    return None;
+                    println!("Expected a flag, instead found: {}", flag_value);
                 }
             }
         }
@@ -290,11 +300,3 @@ impl<'a> Commander<'a> {
         }
     }
 }
-
-// #[cfg(test)]
-// mod tests {
-//     #[test]
-//     fn it_works() {
-//         assert_eq!(2 + 2, 4);
-//     }
-// }
