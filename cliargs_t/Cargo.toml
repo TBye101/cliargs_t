@@ -3,6 +3,11 @@ name = "cliargs_t"
 version = "0.1.0"
 authors = ["TBye101 <ThomasBye1@gmail.com>"]
 edition = "2018"
+readme = "../README.md"
+repository = "https://github.com/TBye101/cliargs_t"
+license = "MIT"
+categories = ["command-line-interface"]
+keywords = ["cli", "command line", "commands", "help", "input parser"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
