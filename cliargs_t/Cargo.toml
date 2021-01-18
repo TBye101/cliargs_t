@@ -1,5 +1,6 @@
 [package]
 name = "cliargs_t"
+description = "Simple Rust command parser"
 version = "0.1.0"
 authors = ["TBye101 <ThomasBye1@gmail.com>"]
 edition = "2018"
