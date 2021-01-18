@@ -10,6 +10,7 @@ Provides an Automatic Help Command |
 Users would utilize your commands like so if they were to utilize the example code below:
 
 No flags: ```hello```
+
 Flag: ```hello -a flag_value```
 
 ### Help Command
